@@ -5,7 +5,7 @@
 # https://github.com/docker-library/python/blob/master/3.6/stretch/slim/Dockerfile
 #
 
-FROM debian:stretch-slim
+FROM google/cloud-sdk:latest
 
 # ensure local python is preferred over distribution python
 ENV PATH /usr/local/bin:$PATH
