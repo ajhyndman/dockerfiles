@@ -137,8 +137,8 @@ RUN set -ex; \
 		\) -exec rm -rf '{}' +; \
 	rm -f get-pip.py
 
-# Install pipenv
-RUN pip install pipenv
+# Install virtualenv
+RUN pip install virtualenv
 
 
 #
