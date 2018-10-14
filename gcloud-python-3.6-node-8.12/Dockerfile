@@ -220,6 +220,15 @@ RUN set -ex \
 # Basic smoke test
 RUN node --version
 
+# Configure circleci user
+RUN set -ex \
+	&& savedAptMark="$(apt-mark showmanual)" \
+	&& apt-get update \
+	&& apt-get install -y --no-install-recommends sudo \
+	&& groupadd --gid 3434 circleci \
+  && useradd --uid 3434 --gid circleci --shell /bin/bash --create-home circleci \
+  && echo 'circleci ALL=NOPASSWD: ALL' >> /etc/sudoers.d/50-circleci
+
 USER circleci
 
 CMD ["/bin/sh"]
