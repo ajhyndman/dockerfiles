@@ -2,10 +2,10 @@
 # NOTE: This dockerfile is modified from the official docker-library.
 #
 # Source:
-# https://github.com/docker-library/python/blob/master/3.6/jessie/Dockerfile
+# https://github.com/docker-library/python/blob/master/3.6/alpine3.6/Dockerfile
 #
 
-FROM buildpack-deps:jessie
+FROM alpine:3.6
 
 # ensure local python is preferred over distribution python
 ENV PATH /usr/local/bin:$PATH
@@ -14,15 +14,19 @@ ENV PATH /usr/local/bin:$PATH
 # > At the moment, setting "LANG=C" on a Linux system *fundamentally breaks Python 3*, and that's not OK.
 ENV LANG C.UTF-8
 
-# extra dependencies (over what buildpack-deps already includes)
-RUN apt-get update && apt-get install -y --no-install-recommends \
-		tk-dev \
-	&& rm -rf /var/lib/apt/lists/*
+# install ca-certificates so that HTTPS works consistently
+# other runtime dependencies for Python are installed later
+RUN apk add --no-cache ca-certificates
 
 ENV GPG_KEY 0D96DF4D4110E5C43FBFB17F2D347EA6AA65421D
 ENV PYTHON_VERSION 3.6.6
 
 RUN set -ex \
+	&& apk add --no-cache --virtual .fetch-deps \
+		gnupg \
+		libressl \
+		tar \
+		xz \
 	\
 	&& wget -O python.tar.xz "https://www.python.org/ftp/python/${PYTHON_VERSION%%[a-z]*}/Python-$PYTHON_VERSION.tar.xz" \
 	&& wget -O python.tar.xz.asc "https://www.python.org/ftp/python/${PYTHON_VERSION%%[a-z]*}/Python-$PYTHON_VERSION.tar.xz.asc" \
@@ -35,6 +39,32 @@ RUN set -ex \
 	&& tar -xJC /usr/src/python --strip-components=1 -f python.tar.xz \
 	&& rm python.tar.xz \
 	\
+	&& apk add --no-cache --virtual .build-deps  \
+		bzip2-dev \
+		coreutils \
+		dpkg-dev dpkg \
+		expat-dev \
+		findutils \
+		gcc \
+		gdbm-dev \
+		libc-dev \
+		libffi-dev \
+		libressl \
+		libressl-dev \
+		linux-headers \
+		make \
+		ncurses-dev \
+		pax-utils \
+		readline-dev \
+		sqlite-dev \
+		tcl-dev \
+		tk \
+		tk-dev \
+		xz-dev \
+		zlib-dev \
+# add build deps before removing fetch deps in case there's overlap
+	&& apk del .fetch-deps \
+	\
 	&& cd /usr/src/python \
 	&& gnuArch="$(dpkg-architecture --query DEB_BUILD_GNU_TYPE)" \
 	&& ./configure \
@@ -45,8 +75,17 @@ RUN set -ex \
 		--with-system-ffi \
 		--without-ensurepip \
 	&& make -j "$(nproc)" \
+# set thread stack size to 1MB so we don't segfault before we hit sys.getrecursionlimit()
+# https://github.com/alpinelinux/aports/commit/2026e1259422d4e0cf92391ca2d3844356c649d0
+		EXTRA_CFLAGS="-DTHREAD_STACK_SIZE=0x100000" \
 	&& make install \
-	&& ldconfig \
+	\
+	&& find /usr/local -type f -executable -not \( -name '*tkinter*' \) -exec scanelf --needed --nobanner --format '%n#p' '{}' ';' \
+		| tr ',' '\n' \
+		| sort -u \
+		| awk 'system("[ -e /usr/local/lib/" $1 " ]") == 0 { next } { print "so:" $1 }' \
+		| xargs -rt apk add --no-cache --virtual .python-rundeps \
+	&& apk del .build-deps \
 	\
 	&& find /usr/local -depth \
 		\( \
@@ -69,6 +108,8 @@ RUN cd /usr/local/bin \
 ENV PYTHON_PIP_VERSION 18.1
 
 RUN set -ex; \
+	\
+	apk add --no-cache --virtual .fetch-deps libressl; trap 'apk del .fetch-deps' EXIT; \
 	\
 	wget -O get-pip.py 'https://bootstrap.pypa.io/get-pip.py'; \
 	\
