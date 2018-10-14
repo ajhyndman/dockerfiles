@@ -158,7 +158,7 @@ RUN groupadd --gid 1000 node \
 
 # gpg keys listed at https://github.com/nodejs/node#release-team
 RUN set -ex \
-	savedAptMark="$(apt-mark showmanual)" \
+	&& savedAptMark="$(apt-mark showmanual)" \
 	&& apt-get update \
 	&& apt-get install -y --no-install-recommends gnupg dirmngr xz-utils \
   && for key in \
